@@ -1,0 +1,112 @@
+---
+title: "predicting-chance"
+author: "Matt Rosinski"
+date: "2023-05-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{python}
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.stats import binom
+import seaborn as sns
+
+
+def plot_likelihood(games_played, games_won):
+    n = games_played
+    k = games_won
+    
+    pi_vals = np.arange(0, 1.01, 0.01)
+    likelihoods = np.array([binom.pmf(k, n, p) for p in pi_vals])
+    
+    data = pd.DataFrame({"pi": pi_vals, "likelihood": likelihoods})
+    
+    plt.plot(data["pi"], data["likelihood"])
+    plt.title(f"Likelihood of team win probability given {k} out of {n} games won")
+    plt.xlabel("Win Probability")
+    plt.ylabel("Likelihood")
+    plt.show()
+
+# Example usage
+plot_likelihood(games_played=7, games_won=2)
+
+
+```
+
+
+```{python}
+# Function to create likelihood table
+def likelihood_table(games_played):
+    n = games_played
+    pi_vals = np.array([0.25, 0.5, 0.75])
+    games_won = np.arange(0, games_played + 1)
+    
+    likelihoods = np.array([[binom.pmf(k, n, p) for p in pi_vals] for k in games_won])
+    
+    data = pd.DataFrame(likelihoods, columns=[f"Pi = {p}" for p in pi_vals], index=games_won)
+    data.index.name = "Games_Won"
+    
+    return data
+
+# Example usage
+data = likelihood_table(7)
+print(data)
+```
+
+
+```{python}
+# Function to display the likelihood table with a background gradient
+def display_likelihood_table(data):
+    cm = sns.light_palette("green", as_cmap=True)
+    styled_table = data.style.background_gradient(cmap=cm, axis=1).highlight_max(axis=1, color="yellow")
+    return styled_table
+
+# Example usage
+display_likelihood_table(data)
+
+```
+
+```{python}
+
+def display_likelihood_table(data, output_filename="likelihood_table.png"):
+    cm = sns.light_palette("green", as_cmap=True)
+    styled_table = data.style.background_gradient(cmap=cm, axis=1).highlight_max(axis=1, color="yellow")
+    
+    fig, ax = plt.subplots(figsize=(12, 2 + 0.5 * len(data)))  # Adjust the figure size based on the number of rows in the table
+    ax.axis("off")
+
+    cell_text = []
+    for row in range(len(data)):
+        row_data = []
+        for col in data.columns:
+            row_data.append("{:.4f}".format(data.at[row, col]))
+        cell_text.append(row_data)
+
+    # Create the cell colors array
+    norm_data = (data - data.min().min()) / (data.max().max() - data.min().min())
+    cell_colors = cm(norm_data)
+    max_indices = data.idxmax(axis=1)
+    for row, max_col in enumerate(max_indices):
+        cell_colors[row, max_col] = (1, 1, 0, 1)  # Set the maximum value's cell color to yellow (RGBA format)
+
+    table = ax.table(cellText=cell_text, rowLabels=data.index, colLabels=data.columns,
+                     cellLoc="center", bbox=[0, 0, 1, 1], cellColours=cell_colors)
+    table.auto_set_font_size(False)
+    table.set_fontsize(14)
+    table.scale(1, 1.5)  # Increase the row height for better readability
+
+    plt.savefig(output_filename, dpi=300, bbox_inches="tight")
+    plt.show()
+
+# Example usage
+data = likelihood_table(7)
+display_likelihood_table(data, "likelihood_table.png")
+
+
+```
+
