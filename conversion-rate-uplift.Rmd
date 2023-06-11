@@ -1,0 +1,183 @@
+---
+title: "Conversion Rate Uplift"
+author: "Matt Rosinski"
+date: "2023-05-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{python}
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import beta
+from scipy.stats import gaussian_kde
+```
+
+
+```{python}
+
+def plot_conversion_rate_uplift(impressions1, conversions1, impressions2, conversions2, prob = 0.89):
+    
+    np.random.seed(123)
+    # Generate posterior samples for the conversion rates of Test 1 and Test 2
+    n_sims = 100000
+    posterior1 = beta.rvs(conversions1 + 1, impressions1 - conversions1 + 1, size=n_sims)
+    posterior2 = beta.rvs(conversions2 + 1, impressions2 - conversions2 + 1, size=n_sims)
+
+    # Calculate the difference in conversion rates
+    diff_conversion_rate = posterior2 - posterior1
+
+    # Calculate the probability that Test 2 has a higher conversion rate than Test 1
+    prob_test2_higher = np.mean(diff_conversion_rate > 0)
+
+    # Create a data frame for plotting
+    density = gaussian_kde(diff_conversion_rate)
+
+    # Calculate density over a range of differences
+    x = np.linspace(min(diff_conversion_rate), max(diff_conversion_rate), 200)
+    y = density(x)
+
+    # Compute the maximum density and corresponding difference
+    max_density_idx = np.argmax(y)
+    max_density = y[max_density_idx]
+    max_diff = x[max_density_idx]
+
+    # Create plot
+    fig, ax = plt.subplots(figsize=(5, 8))
+    
+    # Plot the density
+    ax.plot(x, y, color='black')
+
+    # Shade the area under the curve
+    ax.fill_between(x, y, where=(x>=0), interpolate=True, color='#56B4E9', alpha=0.6)
+    ax.fill_between(x, y, where=(x<0), interpolate=True, color='#E69F00', alpha=0.6)
+
+    # Add vertical lines
+    ax.axvline(0, linestyle='dashed', color='darkgrey')
+    ax.axvline(max_diff, linestyle='dashed', color='darkgrey')
+
+    # Add annotations
+    # ax.text(0.025, max(y) - 0.01, f"P(Test > Base) = {prob_test2_higher*100:.1f}%", color='black')
+    ax.text(max_diff, max_density + 1, f"Most probable uplift: {max_diff*100:.2f}%", color='black')
+    
+    # Set labels and title
+    ax.set_xlabel('Difference in Conversion Rate (Test - Base)')
+    ax.set_ylabel('Density')
+    ax.set_title('Conversion Rate Uplift', fontweight='bold', pad=20) 
+    ax.text(x=0.5, y=1.02, s=f"Probability of Test having a higher conversion rate than Base: {prob_test2_higher*100:.1f}%", 
+            fontsize=10, alpha=0.75, ha='center', va='bottom', transform=ax.transAxes)
+            
+    ax.set_ylim(0, max(y)+ 5)
+    # Set labels and title
+    # ax.set_xlabel('Difference in Conversion Rate (Test - Base)')
+    # ax.set_ylabel('Density')
+    # ax.set_title('Conversion Rate Uplift', fontweight='bold', pad=40) # increased padding to 40
+    # ax.text(x=0.5, y=1.02, s=f"Probability of Test having a higher conversion rate than Base: {prob_test2_higher*100:.1f}%", 
+    #         fontsize=10, alpha=0.75, ha='center', va='bottom', transform=ax.transAxes)
+
+    # Remove top and right spines
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+
+    plt.show()
+    
+```
+
+
+```{python}
+plot_conversion_rate_uplift(
+    impressions1 = 1000, 
+    conversions1 = 19,
+    impressions2 = 800, 
+    conversions2 = 20)
+
+```
+
+```{r}
+library(ggplot2)
+
+plot_conversion_rate_uplift <- 
+    function(impressions1, 
+             conversions1, 
+             impressions2, 
+             conversions2, 
+             prob = 0.89) {
+        
+    set.seed(111)
+    
+    # Generate posterior samples for the conversion rates of Test 1 and Test 2
+    n_sims <- 100000
+    posterior1 <- rbeta(n_sims, conversions1 + 1, impressions1 - conversions1 + 1)
+    posterior2 <- rbeta(n_sims, conversions2 + 1, impressions2 - conversions2 + 1)
+    
+    # Calculate the difference in conversion rates
+    diff_conversion_rate <- posterior2 - posterior1
+    
+    # Calculate the probability that Test 2 has a higher conversion rate than Test 1
+    prob_test2_higher <- mean(diff_conversion_rate > 0)
+    
+    # Create a data frame for plotting
+    df <- data.frame(Difference = diff_conversion_rate)
+    
+    # Create a density data frame for plotting
+    dens <- density(diff_conversion_rate)
+    dens_df <- data.frame(Difference = dens$x, Density = dens$y)
+    
+    # Compute the maximum density and corresponding difference
+    max_density <- max(dens_df$Density)
+    max_diff <- dens_df$Difference[which.max(dens_df$Density)]
+    
+    # Compute the 95% HPDI
+    hpdi <- coda::HPDinterval(as.mcmc(diff_conversion_rate), prob = prob)
+    
+    # Plot the distribution of the difference and fill with different colors
+    plot <- ggplot(df, aes(x = Difference)) +
+        geom_line(stat = 'density', aes(y = after_stat(density)), 
+                  colour = "black", linewidth = .5) +
+        geom_ribbon(data = subset(dens_df, Difference >= 0), 
+                    aes(ymax = Density, x = Difference), 
+                    ymin = 0, fill = "#56B4E9", alpha = 0.6) +
+        geom_ribbon(data = subset(dens_df, Difference < 0), 
+                    aes(ymax = Density, x = Difference), 
+                    ymin = 0, fill = "#E69F00", alpha = 0.6) +
+        geom_vline(xintercept = 0, linetype = "dashed", color = "dark grey") +
+        geom_vline(xintercept = max_diff, linetype = "dashed", color = "dark grey") +
+        geom_vline(xintercept = hpdi[1], linetype = "dashed", color = "light grey") +
+        geom_vline(xintercept = hpdi[2], linetype = "dashed", color = "light grey") +
+        annotate("text", x = max_diff, y = max_density + 2, 
+                 label = paste0("Most probable uplift: ", round(max_diff * 100, 2), "%"), 
+                 color = "black") +
+        labs(x = "Difference in Conversion Rate (Test - Base)", y = "Density",
+             title = "Conversion Rate Uplift",
+             subtitle = paste0("Probability of Test having a higher conversion rate than Base: ", 
+                               round(prob_test2_higher * 100, 1), "%")) +
+        theme_minimal() +
+        theme(plot.title = element_text(face = "bold"),
+              text = element_text(size = 12),
+              legend.position = "none")
+    
+    return(plot)
+}
+```
+
+
+```{r}
+plot_conversion_rate_uplift(impressions1 = 1000, 
+                            conversions1 = 19, 
+                            impressions2 = 800, 
+                            conversions2 = 20)
+```
+
+
+```{r}
+# Compare with a z-test ----
+conversions <- c(19, 20) # Number of successes (conversions)
+impressions <- c(1000, 800) # Number of trials (impressions)
+
+# Perform the test of proportions
+(result <- prop.test(conversions, impressions))
+```
+
