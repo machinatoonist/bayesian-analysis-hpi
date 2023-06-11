@@ -1,0 +1,88 @@
+---
+title: "bayesian-fun-way"
+author: "Matt Rosinski"
+date: "2023-05-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{python}
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+```
+
+
+```{python}
+def estimate_dice_roll_chances(num_dice=12, sum_greater_than=35, num_sides=6 ):
+    if sum_greater_than >= num_dice*num_sides:
+        return(f"Reduce sum_greater_than below maximum possible: {num_dice*num_sides}")
+    elif sum_greater_than < num_dice:
+        return(f"Increase sum_greater_than above the number of dice: {num_dice}")
+    else:
+        # Generate the probability vector for a single die
+        single_die_prob = np.repeat(1/num_sides, num_sides)
+        
+        # Generate the probability vector for the sum of multiple dice rolls
+        dice_sum_prob = single_die_prob
+        for _ in range(num_dice - 1):
+            dice_sum_prob = np.convolve(dice_sum_prob, single_die_prob)
+        
+        # Calculate the probability of the sum being greater than sum_greater_than
+        favorable_prob = np.sum(dice_sum_prob[(sum_greater_than - num_dice + 1):])
+        
+        # Output the result
+        print(f"Probability of getting a sum greater than {sum_greater_than} when \
+        rolling {num_dice} {num_sides}-sided dice: {round(favorable_prob, 4)}")
+        
+        # Create a pandas DataFrame for the dice sums and their probabilities
+        dice_sum_prob_df = pd.DataFrame({
+            "sum": np.arange(num_dice, num_dice * num_sides + 1),
+            "probability": dice_sum_prob
+        })
+        
+        # Determine the sum with the maximum probability
+        max_prob_sum = dice_sum_prob_df["sum"].iloc[np.argmax(dice_sum_prob_df["probability"])]
+        
+        # Plot the probability distribution using seaborn
+        plt.figure(figsize=(10,6))
+        sns.barplot(x="sum", y="probability", data=dice_sum_prob_df, 
+            palette=["steelblue" if x <= sum_greater_than else "red" 
+            for x in dice_sum_prob_df["sum"]])
+        plt.axvline(x=max_prob_sum-num_dice, color="black", linestyle="--")
+        plt.axvline(x=sum_greater_than-num_dice, color="black", linestyle="--")
+        plt.title(f"Probability Distribution of Dice Sums: {num_dice} dice")
+        plt.xlabel("Sum")
+        plt.ylabel("Probability")
+        plt.text(max_prob_sum-num_dice-0.5, 
+        max(dice_sum_prob_df["probability"]), "Max Likely Sum", ha='right', va='top', color="black")
+        plt.text(sum_greater_than-num_dice + 4, 
+        max(dice_sum_prob_df["probability"])/1.3, "Target Sum", ha='right', va='top', color="black")
+        plt.text(max(dice_sum_prob_df["sum"])/1.5, 
+        max(dice_sum_prob_df["probability"])/1.15, f"Chance: {round(favorable_prob*100, 1)}%", 
+        color="black", ha='center', va='center', fontsize=12)
+        plt.show()
+```
+
+
+```{python}
+estimate_dice_roll_chances(num_dice=2, sum_greater_than=12)
+```
+
+
+```{python}
+estimate_dice_roll_chances(num_dice=5, sum_greater_than=4)
+
+```
+ 
+```{python}
+estimate_dice_roll_chances(num_dice = 5, sum_greater_than = 20)
+
+```
+ 
+ 
